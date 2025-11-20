@@ -1,4 +1,4 @@
-from hapcanMessage import HapcanMessage
+from .hapcanMessage import HapcanMessage
     
 
 ########################## SYSTEM MESSAGES #########################

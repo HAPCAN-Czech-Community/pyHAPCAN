@@ -1,12 +1,14 @@
 from enum import Enum
+from abc import ABC, abstractmethod
 
 
-class HapcanMessage:
+class HapcanMessage(ABC):
     _message_subclasses = {}
     _FRAME_TYPE = None
 
-    def __init__(self, response=False):
+    def __init__(self, response=False, sender=None):
         self.response = response
+        self._sender = sender
 
     def __init_subclass__(cls, **kwargs):
         """
@@ -35,6 +37,9 @@ class HapcanMessage:
     def frameType(self):
         return HapcanMessageType(self._FRAME_TYPE)
 
+    @abstractmethod
+    def to_bytes(self):
+        pass
 
     def __str__(self):
         s = str(self.frameType) + f": \r\n"
@@ -60,6 +65,7 @@ class HapcanMessage:
         msg.checksumValid = HapcanMessage._verify_checksum(data)
         return msg
 
+    # To be used when the message type should be different from defined ones
     @staticmethod
     def raw_from_bytes(data: bytearray):
         msg = HapcanMessage()
@@ -144,4 +150,4 @@ class HapcanMessageType:
 
 
 # Import all message types, needs to be at the end of the module
-from hapcanUartSystemMessageTypes import *
+from .hapcanUartSystemMessages import *
