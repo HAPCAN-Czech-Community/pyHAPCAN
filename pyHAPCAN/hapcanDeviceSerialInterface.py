@@ -4,11 +4,13 @@ import serial
 from .hapcanMessage import HapcanMessage, HapcanMessageType
 from .hapcanDevice import HapcanDevice
 
+from pyHAPCAN.hapcanMessagesDefinition import *
+
 
 class HapcanDeviceSerialInterface(HapcanDevice):
 
     def __init__(self, serial:serial.Serial, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, aType=101, **kwargs)
         self.serial = serial
         self._rxBuffer = bytearray()
 
@@ -47,26 +49,19 @@ class HapcanDeviceSerialInterface(HapcanDevice):
 
         ### Process System Messages coming from serial port ###
         if f.frameType == HapcanMessageType.HW_TYPE_REQ_NODE:
-            #                0xAA 0x104  0x1 HARD1 HARD2  HVER  0xFF   ID0   ID1   ID2   ID3 CHKSUM 0xA5
-            response = bytearray([0x10, 0x41, 0x30, 0x00, 0x03, 0xFF, 0x01, 0x23, 0x45, 0x67])
-            self._sendSerialFrame(response)
-
+            self._sendSerialMessage(HapcanMessage_HW_TYPE_REQ_NODE_RESP(hard=self.hard, hVer=self.hVer, serialNumber=self.serialNumber))
+        
         elif f.frameType == HapcanMessageType.FW_TYPE_REQ_NODE:
-            #                0xAA 0x106  0x1 HARD1 HARD2  HVER ATYPE AVERS FVERS BVER1 BREV2 CHKSUM 0xA5
-            response = bytearray([0x10, 0x61, 0x30, 0x00, 0x03, 0x65, 0x00, 0x01, 0x00, 0x00])
-            self._sendSerialFrame(response)
-
+            self._sendSerialMessage(HapcanMessage_FW_TYPE_REQ_NODE_RESP(hard=self.hard, hVer=self.hVer, aType=self.aType, aVers=self.aVers, fVers=self.fVers, bootVer=self.bootVer, bootRev=self.bootRev))
+        
         elif f.frameType == HapcanMessageType.DESC_REQ_NODE:
-            #                0xAA 0x10E  0x1  abc0  abc1  abc2  abc3  abc4  abc5  abc6  abc7 CHKSUM 0xA5
-            response = bytearray([0x10, 0xE1, *(map(ord, "Python E"))])
-            self._sendSerialFrame(response)
-            response = bytearray([0x10, 0xE1, *(map(ord, "mulator_"))])
-            self._sendSerialFrame(response)
+            desc0 = self.description[0:8]
+            desc1 = self.description[8:16]
+            self._sendSerialMessage(HapcanMessage_DESC_REQ_NODE_RESP(desc0))
+            self._sendSerialMessage(HapcanMessage_DESC_REQ_NODE_RESP(desc1))
         
         elif f.frameType == HapcanMessageType.SUPPLY_VOLT_REQ_NODE:
-            #                0xAA 0x10C  0x1 VOLBUS1 VOLBUS2 VOLCPU1 VOLCPU2  0xFF  0xFF  0xFF  0xFF CHKSUM 0xA5
-            response = bytearray([0x10, 0xC1,   0xC4,   0xC0,   0xFF,   0xFF, 0xFF, 0xFF, 0xFF, 0xFF])
-            self._sendSerialFrame(response)
+            self._sendSerialMessage(HapcanMessage_SUPPLY_VOLT_REQ_NODE_RESP(rawVBus=self.rawVBus, rawVCpu=self.rawVCpu))
 
 
     def _sendSerialFrame(self, data:bytearray):
@@ -77,4 +72,4 @@ class HapcanDeviceSerialInterface(HapcanDevice):
 
 
     def _sendSerialMessage(self, message:HapcanMessage):
-        self._sendSerialFrame(message.to_bytes())
+        self.serial.write(message.to_bytes())

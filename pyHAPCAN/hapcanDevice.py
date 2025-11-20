@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from .hapcanUartSystemMessages import *
+from .hapcanMessagesDefinition import *
 
 
 class HapcanDevice:
@@ -75,7 +75,7 @@ class HapcanDevice:
     def processMessage(self, m: HapcanMessage):
         # Must be handled by subclasses
         pass
-    
+
 
     def process(self):
         # May be handled by subclasses which need to process something in a loop

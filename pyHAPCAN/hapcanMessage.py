@@ -6,8 +6,7 @@ class HapcanMessage(ABC):
     _message_subclasses = {}
     _FRAME_TYPE = None
 
-    def __init__(self, response=False, sender=None):
-        self.response = response
+    def __init__(self, sender=None):
         self._sender = sender
 
     def __init_subclass__(cls, **kwargs):
@@ -65,6 +64,7 @@ class HapcanMessage(ABC):
         msg.checksumValid = HapcanMessage._verify_checksum(data)
         return msg
 
+
     # To be used when the message type should be different from defined ones
     @staticmethod
     def raw_from_bytes(data: bytearray):
@@ -73,17 +73,16 @@ class HapcanMessage(ABC):
         msg.checksumValid = HapcanMessage._verify_checksum(data)
         return msg
 
+
     @staticmethod
     def _extract_frame_type(data: bytearray) -> int:
-        return (data[1] << 8 | data[2]) >> 4
+        return (data[1] << 8 | data[2])
     
-    @staticmethod
-    def _extract_response(data: bytearray) -> bool:
-        return data[2] & 0x01
 
     @staticmethod
     def _verify_checksum(data: bytearray):
         return sum(data[1:-2]) & 0xFF == data[-2]
+
 
     @staticmethod
     def _append_checksum(data: bytearray):
@@ -101,8 +100,8 @@ class HapcanMessage(ABC):
 
     @staticmethod
     def _prepend_type(data: bytearray, frameType: int):
-        hi = (frameType >> 4) & 0xFF
-        lo = (frameType & 0x0F) << 4
+        hi = (frameType >> 8) & 0xFF
+        lo = (frameType & 0xFF)
 
         data.insert(0, lo)
         data.insert(0, hi)
@@ -150,4 +149,4 @@ class HapcanMessageType:
 
 
 # Import all message types, needs to be at the end of the module
-from .hapcanUartSystemMessages import *
+from .hapcanMessagesDefinition import *
