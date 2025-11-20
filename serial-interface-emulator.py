@@ -8,6 +8,7 @@
 
 import serial
 import time
+from copy import copy
 
 from hapcanMessage import HapcanMessage, HapcanMessageType
 
@@ -25,6 +26,7 @@ class HapcanEmulator(serial.Serial):
         print("Disconnecting from " + SERIAL_PORT )
         self.close()
 
+
     def __init__(self):
         super().__init__(
             port=SERIAL_PORT,
@@ -35,6 +37,14 @@ class HapcanEmulator(serial.Serial):
             timeout=1,
         )
         print("Connected to " + SERIAL_PORT)
+
+
+    def sendFrame(self, data:bytearray):
+        frame = copy(data)
+        HapcanMessage._append_checksum(frame)
+        HapcanMessage._append_header_trailer(frame)
+        self.write(frame)
+
 
     def processLoop(self):
         buffer = bytearray()
@@ -69,26 +79,25 @@ class HapcanEmulator(serial.Serial):
         ### Serial interface responses ###
         if f.frameType == HapcanMessageType.HW_TYPE_REQ_NODE:
             #                0xAA 0x104  0x1 HARD1 HARD2  HVER  0xFF   ID0   ID1   ID2   ID3 CHKSUM 0xA5
-            response = bytearray([0x10, 0x41, 0x01, 0x02, 0x03, 0xFF, 0x05, 0x06, 0x07, 0x08])
+            response = bytearray([0x10, 0x41, 0x30, 0x00, 0x03, 0xFF, 0x01, 0x23, 0x45, 0x67])
+            self.sendFrame(response)
 
         elif f.frameType == HapcanMessageType.FW_TYPE_REQ_NODE:
             #                0xAA 0x106  0x1 HARD1 HARD2  HVER ATYPE AVERS FVERS BVER1 BREV2 CHKSUM 0xA5
-            response = bytearray([0x10, 0x61, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17])
+            response = bytearray([0x10, 0x61, 0x30, 0x00, 0x03, 0x65, 0x00, 0x01, 0x03, 0x04])
+            self.sendFrame(response)
 
-        #elif f.frameType == HapcanMessageType.DESC_REQ_NODE:
-        #    #
-        #    response = bytearray([])
-        #
-        #elif f.frameType == HapcanMessageType.SUPPLY_VOLT_REQ_NODE:
-        #    #
-        #    response = bytearray([])
-
-        else:
-            return
-
-        HapcanMessage._append_checksum(response)
-        HapcanMessage._append_header_trailer(response)
-        self.write(response)
+        elif f.frameType == HapcanMessageType.DESC_REQ_NODE:
+            #                0xAA 0x10E  0x1  abc0  abc1  abc2  abc3  abc4  abc5  abc6  abc7 CHKSUM 0xA5
+            response = bytearray([0x10, 0xE1, *(map(ord, "Python E"))])
+            self.sendFrame(response)
+            response = bytearray([0x10, 0xE1, *(map(ord, "mulator "))])
+            self.sendFrame(response)
+        
+        elif f.frameType == HapcanMessageType.SUPPLY_VOLT_REQ_NODE:
+            #                0xAA 0x10C  0x1 VOLBUS1 VOLBUS2 VOLCPU1 VOLCPU2  0xFF  0xFF  0xFF  0xFF CHKSUM 0xA5
+            response = bytearray([0x10, 0xC1,   0x00,   0x00,   0x00,   0x00, 0xFF, 0xFF, 0xFF, 0xFF])
+            self.sendFrame(response)
 
 
 
