@@ -3,7 +3,7 @@
 
 import serial
 
-from pyHAPCAN import HapcanEmulator, HapcanDeviceSerialInterface
+from pyHAPCAN import HapcanEmulator, HapcanDeviceSerialInterface, HapcanDevice
 
 
 SERIAL_PORT = "COM9"
@@ -16,6 +16,9 @@ if __name__ == "__main__":
     serial = serial.Serial(port=SERIAL_PORT, baudrate=115200, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE, bytesize=serial.EIGHTBITS, timeout=1)
 
     hapcan = HapcanEmulator()
-    hapcan.addDevice(HapcanDeviceSerialInterface(serial, nodeId=1, groupId=1, serialNumber=0x01234567, description="Hapcan Emulator"))
-    
+    hapcan.createDevice(HapcanDeviceSerialInterface, serial, nodeId=1, groupId=1, serialNumber=0x01234567, description="Hapcan Emulator")
+    hapcan.createDevice(HapcanDevice, aType=0, hVer=0x03, hard=0x3000,
+                        nodeId=1, groupId=1, serialNumber=1, fVers=1,
+                        aVers=2, bootVer=3, bootRev=4, description="Empty test dev.")
+
     hapcan.processLoop()

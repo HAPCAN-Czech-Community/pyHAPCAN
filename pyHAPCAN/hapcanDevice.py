@@ -1,11 +1,9 @@
-from abc import ABC, abstractmethod
-
-from .hapcanMessagesDefinition import *
+from .hapcanMessage import HapcanMessage
 
 
 class HapcanDevice:
 
-    def __init__(self, nodeId, groupId, serialNumber, aType,
+    def __init__(self, emulator, nodeId, groupId, serialNumber, aType,
                  hard=0x3000, hVer=0x03, aVers=0x00, fVers=0x00,
                  bootVer=0x00, bootRev=0x00, description="",
                  rawVBus=0x0000, rawVCpu=0x0000):
@@ -70,13 +68,66 @@ class HapcanDevice:
         self.rawVBus = rawVBus
         self.rawVCpu = rawVCpu
 
+        self._emulator = emulator
 
-    @abstractmethod
-    def processMessage(self, m: HapcanMessage):
-        # Must be handled by subclasses
-        pass
+
+    def processCanApplicationMessage(self, m: HapcanMessage):
+         # If this is NOT an instance of HapcanDevice itself, complain
+        if type(self) is not HapcanDevice:
+            raise NotImplementedError(f"{self.__class__.__name__} must implement processCanApplicationMessage()")
+        
+
+    def processCanMessage(self, m: HapcanMessage):
+        # Process system messages first
+        if m.FRAME_TYPE == HapcanMessage.EXIT_ALL_BOOTLOADER.FRAME_TYPE:
+            return
+        
+        elif m.FRAME_TYPE == HapcanMessage.EXIT_ONE_BOOTLOADER.FRAME_TYPE:
+            return
+            
+        elif m.FRAME_TYPE == HapcanMessage.HW_TYPE_REQ_GROUP.FRAME_TYPE:
+            if (m.reqGroup == self.groupId) or (m.reqGroup == 0):
+                resp = HapcanMessage.HW_TYPE_REQ_GROUP_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
+                                                            hard=self.hard, hVer=self.hVer, serialNumber=self.serialNumber)
+                self.sendCanMessage(resp)
+            return
+        
+        elif m.FRAME_TYPE == HapcanMessage.FW_TYPE_REQ_GROUP.FRAME_TYPE:
+            if (m.reqGroup == self.groupId) or (m.reqGroup == 0):
+                resp = HapcanMessage.FW_TYPE_REQ_GROUP_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
+                                                           hard=self.hard, hVer=self.hVer, aType=self.aType,
+                                                           aVers=self.aVers, fVers=self.fVers,
+                                                           bootVer=self.bootVer, bootRev=self.bootRev)
+                self.sendCanMessage(resp)
+            return
+        
+        elif m.FRAME_TYPE == HapcanMessage.DESC_REQ_GROUP.FRAME_TYPE:
+            if (m.reqGroup == self.groupId) or (m.reqGroup == 0):
+                desc0 = self.description[0:8]
+                desc1 = self.description[8:16]
+                resp0 = HapcanMessage.DESC_REQ_GROUP_RESP(senderNode=self.nodeId, senderGroup=self.groupId, desc=desc0)
+                resp1 = HapcanMessage.DESC_REQ_GROUP_RESP(senderNode=self.nodeId, senderGroup=self.groupId, desc=desc1)
+                self.sendCanMessage(resp0)
+                self.sendCanMessage(resp1)
+            return
+        
+        elif (m.FRAME_TYPE == HapcanMessage.SUPPLY_VOLT_REQ_GROUP.FRAME_TYPE
+        and ((m.reqGroup == self.groupId) or (m.reqGroup == 0))):
+            if ((m.reqGroup == self.groupId) or (m.reqGroup == 0)):
+                resp = HapcanMessage.SUPPLY_VOLT_REQ_GROUP_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
+                                                                rawVBus=self.rawVBus, rawVCpu=self.rawVCpu)
+                self.sendCanMessage(resp)
+            return
+        
+        # Forward other messages to application message processing
+        self.processCanApplicationMessage(m)
 
 
     def process(self):
         # May be handled by subclasses which need to process something in a loop
         pass
+
+
+    def sendCanMessage(self, message:HapcanMessage):
+        message._sender = self
+        self._emulator.broadcastCanMessage(message)

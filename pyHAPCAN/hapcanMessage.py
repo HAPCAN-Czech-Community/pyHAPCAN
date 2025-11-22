@@ -1,47 +1,52 @@
-from enum import Enum
-from abc import ABC, abstractmethod
 
 
-class HapcanMessage(ABC):
-    _message_subclasses = {}
-    _FRAME_TYPE = None
+# Base class for all HAPCAN messages
+class HapcanMessage:
+
+    _message_type_subclasses = {}
+    FRAME_TYPE = None
+
 
     def __init__(self, sender=None):
         self._sender = sender
 
+
     def __init_subclass__(cls, **kwargs):
         """
         Automatically called when a subclass of HapcanMessage is created.
-        Used to register subclasses and their _FRAME_TYPE values.
+        Used to register subclasses and their FRAME_TYPE values.
         """
-        super().__init_subclass__(**kwargs)
 
         # Skip the base class itself
-        if cls is HapcanMessage:
+        if cls.__name__.startswith("HapcanMessage"):
             return
+        
 
-        # Register subclasses declaring _FRAME_TYPE
-        if hasattr(cls, "_FRAME_TYPE"):
-            ft = cls._FRAME_TYPE
+        # Register subclasses declaring FRAME_TYPE
+        if hasattr(cls, "FRAME_TYPE"):
+            baseCls = cls.__bases__[0]
+            ft = cls.FRAME_TYPE
 
             # Store subclass in dispatch table
-            HapcanMessage._message_subclasses[ft] = cls
+            baseCls._message_type_subclasses[ft] = cls
 
-            # Add value dynamically to the enum if not yet present
-            if ft not in HapcanMessageType.members():
-                HapcanMessageType.add(cls.__name__.removeprefix("HapcanMessage_"), ft)
+            # Make the subclass a parameter of the base class
+            setattr(baseCls, cls.__name__, cls)
+        
+        else:
+            raise ValueError(f"Subclass {cls.__name__} must define a FRAME_TYPE class attribute.")
 
 
-    @property
-    def frameType(self):
-        return HapcanMessageType(self._FRAME_TYPE)
-
-    @abstractmethod
     def to_bytes(self):
-        pass
+        # If this is NOT an instance of HapcanMessage itself, complain
+        if type(self) is not HapcanMessage:
+            raise NotImplementedError(f"{self.__class__.__name__} must implement to_bytes()")
+        else:
+            return self._rawFrame
+
 
     def __str__(self):
-        s = str(self.frameType) + f": \r\n"
+        s = self.__class__.__name__.removeprefix("HapcanMessage_") + f": \r\n"
         # Move 'checksumValid' to first position if it exists
         items = list(self.__dict__.items())
         items.sort(key=lambda kv: 0 if kv[0] == "checksumValid" else 1)
@@ -51,31 +56,45 @@ class HapcanMessage(ABC):
         return s
 
 
-    @staticmethod
-    def from_bytes(data: bytearray):
-        frameType = HapcanMessage._extract_frame_type(data)
+    @classmethod
+    def from_bytes(cls, data: bytearray):
+        # If this class is NOT HapcanMessage but a subclass,
+        # and it did not override from_bytes, then complain
+        if cls is not HapcanMessage:
+            # method was not overridden if cls.from_bytes is exactly this function
+            if cls.from_bytes is HapcanMessage.from_bytes:
+                raise NotImplementedError(
+                    f"{cls.__name__} must implement from_bytes()"
+                )
+
+        # Check if the frame starts and ends with correct bytes
+        if data[0] != 0xAA or data[-1] != 0xA5:
+            raise ValueError("Invalid frame")
+        
+        frameType = cls._extract_FRAME_TYPE(data)
         try:
-            subclass = HapcanMessage._message_subclasses[frameType]
+            subclass = cls._message_type_subclasses[frameType]
+            msg = subclass.from_bytes(data)
         except KeyError:
-            # Frame type not registered, raise error
-            raise ValueError("Unknown frame type: " + f"0x{frameType:03X}")
-        msg = subclass.from_bytes(data)
+            # Frame type not registered, use base class
+            subclass = cls
+            msg = subclass()
         msg._rawFrame = data
-        msg.checksumValid = HapcanMessage._verify_checksum(data)
+        msg.checksumValid = cls._verify_checksum(data)
         return msg
 
 
     # To be used when the message type should be different from defined ones
-    @staticmethod
-    def raw_from_bytes(data: bytearray):
-        msg = HapcanMessage()
+    @classmethod
+    def raw_from_bytes(cls, data: bytearray):
+        msg = cls()
         msg._rawFrame = data
-        msg.checksumValid = HapcanMessage._verify_checksum(data)
+        msg.checksumValid = cls._verify_checksum(data)
         return msg
 
 
     @staticmethod
-    def _extract_frame_type(data: bytearray) -> int:
+    def _extract_FRAME_TYPE(data: bytearray) -> int:
         return (data[1] << 8 | data[2])
     
 
@@ -106,47 +125,8 @@ class HapcanMessage(ABC):
         data.insert(0, lo)
         data.insert(0, hi)
         return data
-    
-    
-
-class HapcanMessageType:
-    _members = {}
-
-    class _Value(int):
-        def __new__(cls, value, name):
-            obj = int.__new__(cls, value)
-            obj._name = name
-            return obj
-
-        @property
-        def name(self):
-            return self._name
-
-        def __repr__(self):
-            return f"<{self._name}: 0x{int(self):03X}>"
-        
-        def __str__(self):
-            return self._name
-
-    def __new__(cls, value):
-        # lookup by numeric value
-        for member in cls._members.values():
-            if int(member) == value:
-                return member
-        member = cls.add("UNKNOWN", value)
-        return member
-
-    @classmethod
-    def add(cls, name, value):
-        member = cls._Value(value, name)
-        cls._members[name] = member
-        setattr(cls, name, member)
-        return member
-
-    @classmethod
-    def members(cls):
-        return dict(cls._members)
 
 
-# Import all message types, needs to be at the end of the module
-from .hapcanMessagesDefinition import *
+class HapcanMessageUART(HapcanMessage):
+    # Base class for UART messages
+    _message_type_subclasses = {} # Separate dispatch table
