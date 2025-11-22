@@ -46,7 +46,7 @@ class HapcanMessage:
 
 
     def __str__(self):
-        s = self.__class__.__name__.removeprefix("HapcanMessage_") + f": \r\n"
+        s = self.__class__.__name__ + f": \r\n"
         # Move 'checksumValid' to first position if it exists
         items = list(self.__dict__.items())
         items.sort(key=lambda kv: 0 if kv[0] == "checksumValid" else 1)

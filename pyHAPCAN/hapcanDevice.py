@@ -78,22 +78,26 @@ class HapcanDevice:
         
 
     def processCanMessage(self, m: HapcanMessage):
-        # Process system messages first
+        # Process programming messages
         if m.FRAME_TYPE == HapcanMessage.EXIT_ALL_BOOTLOADER.FRAME_TYPE:
             return
         
         elif m.FRAME_TYPE == HapcanMessage.EXIT_ONE_BOOTLOADER.FRAME_TYPE:
             return
-            
+        
+        #TBD ADDRESS_FRAME
+        #TBD DATA_FRAME
+        
+        # Process system messages
         elif m.FRAME_TYPE == HapcanMessage.HW_TYPE_REQ_GROUP.FRAME_TYPE:
-            if (m.reqGroup == self.groupId) or (m.reqGroup == 0):
+            if m.isFor(self):
                 resp = HapcanMessage.HW_TYPE_REQ_GROUP_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
                                                             hard=self.hard, hVer=self.hVer, serialNumber=self.serialNumber)
                 self.sendCanMessage(resp)
             return
-        
+        # HW_TYPE_REQ_NODE
         elif m.FRAME_TYPE == HapcanMessage.FW_TYPE_REQ_GROUP.FRAME_TYPE:
-            if (m.reqGroup == self.groupId) or (m.reqGroup == 0):
+            if m.isFor(self):
                 resp = HapcanMessage.FW_TYPE_REQ_GROUP_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
                                                            hard=self.hard, hVer=self.hVer, aType=self.aType,
                                                            aVers=self.aVers, fVers=self.fVers,
@@ -101,8 +105,15 @@ class HapcanDevice:
                 self.sendCanMessage(resp)
             return
         
+        elif m.FRAME_TYPE == HapcanMessage.SUPPLY_VOLT_REQ_GROUP.FRAME_TYPE:
+            if m.isFor(self):
+                resp = HapcanMessage.SUPPLY_VOLT_REQ_GROUP_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
+                                                                rawVBus=self.rawVBus, rawVCpu=self.rawVCpu)
+                self.sendCanMessage(resp)
+            return
+        
         elif m.FRAME_TYPE == HapcanMessage.DESC_REQ_GROUP.FRAME_TYPE:
-            if (m.reqGroup == self.groupId) or (m.reqGroup == 0):
+            if m.isFor(self):
                 desc0 = self.description[0:8]
                 desc1 = self.description[8:16]
                 resp0 = HapcanMessage.DESC_REQ_GROUP_RESP(senderNode=self.nodeId, senderGroup=self.groupId, desc=desc0)
@@ -111,13 +122,6 @@ class HapcanDevice:
                 self.sendCanMessage(resp1)
             return
         
-        elif (m.FRAME_TYPE == HapcanMessage.SUPPLY_VOLT_REQ_GROUP.FRAME_TYPE
-        and ((m.reqGroup == self.groupId) or (m.reqGroup == 0))):
-            if ((m.reqGroup == self.groupId) or (m.reqGroup == 0)):
-                resp = HapcanMessage.SUPPLY_VOLT_REQ_GROUP_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
-                                                                rawVBus=self.rawVBus, rawVCpu=self.rawVCpu)
-                self.sendCanMessage(resp)
-            return
         
         # Forward other messages to application message processing
         self.processCanApplicationMessage(m)

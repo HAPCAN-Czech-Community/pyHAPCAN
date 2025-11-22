@@ -3,13 +3,8 @@ from .hapcanMessage import HapcanMessageUART
 
 
 class EXIT_ONE_BOOTLOADER(HapcanMessageUART):
-    # 0xAA 0x020 0x0 MODULE GROUP 0xXX 0xXX 0xXX 0xXX 0xXX 0xXX 0xXX 0xXX CHKSUM 0xA5
+    # 0xAA 0x020 0x0 0xXX 0xXX 0xXX 0xXX 0xXX 0xXX 0xXX 0xXX CHKSUM 0xA5
     FRAME_TYPE = 0x0200
-
-    def __init__(self, module, group, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.module = module
-        self.group = group
 
     @classmethod
     def from_bytes(cls, data: bytearray):
@@ -17,11 +12,12 @@ class EXIT_ONE_BOOTLOADER(HapcanMessageUART):
         return msg
     
     def to_bytes(self):
-        data = bytearray(b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00')
+        data = bytearray(b'\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF')
         self._prepend_type(data, self.FRAME_TYPE)
         self._append_checksum(data)
         self._append_header_trailer(data)
         return data
+
 
 #TBD    ADDRESS_FRAME = 0x030
 #TBD    DATA_FRAME = 0x040

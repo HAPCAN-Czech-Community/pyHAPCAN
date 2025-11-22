@@ -30,7 +30,6 @@ class HapcanDeviceSerialInterface(HapcanDevice):
         if self._rxBuffer[-1] == 0xA5: # Frame end
             # Check if the frame is valid
             if self._rxBuffer[0] == 0xAA:
-                print("Processing incoming serial frame: " + self._rxBuffer.hex(sep=" "))
                 self._processSerialRxFrame(self._rxBuffer)
             else:
                 print("Invalid incoming serial frame: " + self._rxBuffer.hex(sep=" "))
@@ -41,9 +40,8 @@ class HapcanDeviceSerialInterface(HapcanDevice):
         try:
             f = HapcanMessageUART.from_bytes(frame)
         except ValueError as e:
-            print("    ", e)
+            print(e)
             return
-        print(f)
 
         ### Process System Messages coming from serial port ###
         if f.FRAME_TYPE == HapcanMessageUART.EXIT_ONE_BOOTLOADER.FRAME_TYPE:
@@ -74,7 +72,7 @@ class HapcanDeviceSerialInterface(HapcanDevice):
             f._sender = self
             self._emulator.broadcastCanMessage(f)
         except ValueError as e:
-            print("    ", e)
+            print(e)
             return
 
 

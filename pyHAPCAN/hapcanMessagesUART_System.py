@@ -183,7 +183,7 @@ class DESC_REQ_NODE_RESP(HapcanMessageUART):
         self._append_header_trailer(data)
         return data
 
-
+########## Request for the processors identification numbers written by Microchip
 #TBD    DEVID_REQ_NODE = 0x111
 
 

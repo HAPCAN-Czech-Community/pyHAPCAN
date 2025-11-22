@@ -16,6 +16,9 @@ class EXIT_ALL_BOOTLOADER(HapcanMessage):
         self._append_checksum(data)
         self._append_header_trailer(data)
         return data
+    
+    def isFor(self, device):
+        return True
 
 
 class EXIT_ONE_BOOTLOADER(HapcanMessage):
@@ -38,6 +41,9 @@ class EXIT_ONE_BOOTLOADER(HapcanMessage):
         self._append_checksum(data)
         self._append_header_trailer(data)
         return data
+    
+    def isFor(self, device):
+        return (self.targetGroup == device.groupId) and (self.targetNode == device.nodeId)
     
 
 #TBD    ADDRESS_FRAME = 0x030
