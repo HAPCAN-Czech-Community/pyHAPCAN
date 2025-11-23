@@ -5,6 +5,7 @@ class HapcanMessage:
 
     _message_type_subclasses = {}
     FRAME_TYPE = None
+    FRAME_LENGTH = 15 # CAN frames are always 15 bytes long including header and trailer
 
 
     def __init__(self, sender=None):
@@ -130,3 +131,4 @@ class HapcanMessage:
 class HapcanMessageUART(HapcanMessage):
     # Base class for UART messages
     _message_type_subclasses = {} # Separate dispatch table
+    FRAME_LENGTH = None # UART frames are never(?) 15 bytes long including header and trailer

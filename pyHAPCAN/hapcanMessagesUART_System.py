@@ -2,8 +2,60 @@ from .hapcanMessage import HapcanMessageUART
     
 
 
-#TBD    ENTER_PROG_MODE_REQ = 0x100
-#TBD    REBOOT_REQ_NODE = 0x102
+class ENTER_PROG_MODE_REQ(HapcanMessageUART):
+    # 0xAA 0x100 0x0 CHKSUM 0xA5
+    FRAME_TYPE = 0x1000
+
+    @classmethod
+    def from_bytes(cls, data: bytearray):
+        msg = cls()
+        return msg
+    
+    def to_bytes(self):
+        data = bytearray(b'')
+        self._prepend_type(data, self.FRAME_TYPE)
+        self._append_checksum(data)
+        self._append_header_trailer(data)
+        return data
+    
+
+class ENTER_PROG_MODE_REQ_RESP(HapcanMessageUART):
+    # 0xAA 0x100 0x1 0xFF 0xFF BVER1 BVER2 0xFF 0xFF 0xFF 0xFF CHKSUM 0xA5
+    FRAME_TYPE = 0x1001
+
+    def __init__(self, bootVer, bootRev, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.bootVer = bootVer
+        self.bootRev = bootRev
+    
+    @classmethod
+    def from_bytes(cls, data: bytearray):
+        msg = cls(bootVer=data[5], bootRev=data[6])
+        return msg
+    
+    def to_bytes(self):
+        data = bytearray([0xFF, 0xFF, self.bootVer, self.bootRev, 0xFF, 0xFF, 0xFF, 0xFF])
+        self._prepend_type(data, self.FRAME_TYPE)
+        self._append_checksum(data)
+        self._append_header_trailer(data)
+        return data
+
+
+class REBOOT_REQ_NODE(HapcanMessageUART):
+    # 0xAA 0x102 0x0 CHKSUM 0xA5
+    FRAME_TYPE = 0x1020
+
+    @classmethod
+    def from_bytes(cls, data: bytearray):
+        msg = cls()
+        return msg
+    
+    def to_bytes(self):
+        data = bytearray(b'')
+        self._prepend_type(data, self.FRAME_TYPE)
+        self._append_checksum(data)
+        self._append_header_trailer(data)
+        return data
 
 
 class HW_TYPE_REQ_NODE(HapcanMessageUART):

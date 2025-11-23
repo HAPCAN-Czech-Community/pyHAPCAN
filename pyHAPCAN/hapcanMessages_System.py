@@ -231,6 +231,9 @@ class FW_TYPE_REQ_NODE_RESP(HapcanMessage):
         return data
     
 
+#TBD    INCORRECT_FIRMWARE = 0x1F1
+    
+
 class SET_DEFAULT_NODE_AND_GROUP_REQ(HapcanMessage):
     # 0xAA 0x107 0x0 MODUL GROUP 0xXX 0xXX MODULE GROUP 0xXX 0xXX 0xXX 0xXX CHKSUM 0xA5
     FRAME_TYPE = 0x1070
@@ -258,7 +261,7 @@ class SET_DEFAULT_NODE_AND_GROUP_REQ(HapcanMessage):
         return (self.reqGroup == device.groupId) and (self.reqNode == device.nodeId)
     
 
-class SET_DEFAULT_NODE_AND_GROUP_RESP(HapcanMessage):
+class SET_DEFAULT_NODE_AND_GROUP_REQ_RESP(HapcanMessage):
     # 0xAA 0x107 0x1 ID2 ID3 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF CHKSUM 0xA5
     FRAME_TYPE = 0x1071
 

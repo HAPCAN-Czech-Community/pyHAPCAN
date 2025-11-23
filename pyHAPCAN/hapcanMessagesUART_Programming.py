@@ -8,11 +8,11 @@ class EXIT_ONE_BOOTLOADER(HapcanMessageUART):
 
     @classmethod
     def from_bytes(cls, data: bytearray):
-        msg = cls(module=data[3], group=data[4])
+        msg = cls()
         return msg
     
     def to_bytes(self):
-        data = bytearray(b'\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF')
+        data = bytearray(b'\x00\x00\x00\x00\x00\x00\x00\x00')
         self._prepend_type(data, self.FRAME_TYPE)
         self._append_checksum(data)
         self._append_header_trailer(data)

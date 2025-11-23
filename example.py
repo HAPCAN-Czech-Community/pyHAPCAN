@@ -18,7 +18,7 @@ if __name__ == "__main__":
     hapcan = HapcanEmulator()
     hapcan.createDevice(HapcanDeviceSerialInterface, serial, nodeId=1, groupId=1, serialNumber=0x01234567, description="Hapcan Emulator")
     hapcan.createDevice(HapcanDevice, aType=0, hVer=0x03, hard=0x3000,
-                        nodeId=1, groupId=1, serialNumber=1, fVers=1,
+                        nodeId=1, groupId=1, serialNumber=0x00000201, fVers=1,
                         aVers=2, bootVer=3, bootRev=4, description="Empty test dev.")
 
     hapcan.processLoop()

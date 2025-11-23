@@ -80,14 +80,17 @@ class HapcanDevice:
     def processCanMessage(self, m: HapcanMessage):
         # Process programming messages
         if m.FRAME_TYPE == HapcanMessage.EXIT_ALL_BOOTLOADER.FRAME_TYPE:
-            return
+            if m.isFor(self):
+                return
         
         elif m.FRAME_TYPE == HapcanMessage.EXIT_ONE_BOOTLOADER.FRAME_TYPE:
-            return
+            if m.isFor(self):
+                return
         
         #TBD ADDRESS_FRAME
         #TBD DATA_FRAME
         
+
         # Process system messages
         elif m.FRAME_TYPE == HapcanMessage.HW_TYPE_REQ_GROUP.FRAME_TYPE:
             if m.isFor(self):
@@ -95,7 +98,14 @@ class HapcanDevice:
                                                             hard=self.hard, hVer=self.hVer, serialNumber=self.serialNumber)
                 self.sendCanMessage(resp)
             return
-        # HW_TYPE_REQ_NODE
+        
+        elif m.FRAME_TYPE == HapcanMessage.HW_TYPE_REQ_NODE.FRAME_TYPE:
+            if m.isFor(self):
+                resp = HapcanMessage.HW_TYPE_REQ_NODE_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
+                                                           hard=self.hard, hVer=self.hVer, serialNumber=self.serialNumber)
+                self.sendCanMessage(resp)
+            return
+        
         elif m.FRAME_TYPE == HapcanMessage.FW_TYPE_REQ_GROUP.FRAME_TYPE:
             if m.isFor(self):
                 resp = HapcanMessage.FW_TYPE_REQ_GROUP_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
@@ -105,10 +115,35 @@ class HapcanDevice:
                 self.sendCanMessage(resp)
             return
         
+        elif m.FRAME_TYPE == HapcanMessage.FW_TYPE_REQ_NODE.FRAME_TYPE:
+            if m.isFor(self):
+                resp = HapcanMessage.FW_TYPE_REQ_NODE_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
+                                                           hard=self.hard, hVer=self.hVer, aType=self.aType,
+                                                           aVers=self.aVers, fVers=self.fVers,
+                                                           bootVer=self.bootVer, bootRev=self.bootRev)
+                self.sendCanMessage(resp)
+            return
+        
+        elif m.FRAME_TYPE == HapcanMessage.SET_DEFAULT_NODE_AND_GROUP_REQ.FRAME_TYPE:
+            if m.isFor(self):
+                # Set node and group to default values derived from serial number
+                self.nodeId = self.serialNumber>>8 & 0xFF
+                self.groupId = self.serialNumber & 0xFF
+                resp = HapcanMessage.SET_DEFAULT_NODE_AND_GROUP_REQ_RESP(newNodeId=self.nodeId, newGroupId=self.groupId)
+                self.sendCanMessage(resp)
+            return
+
         elif m.FRAME_TYPE == HapcanMessage.SUPPLY_VOLT_REQ_GROUP.FRAME_TYPE:
             if m.isFor(self):
                 resp = HapcanMessage.SUPPLY_VOLT_REQ_GROUP_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
                                                                 rawVBus=self.rawVBus, rawVCpu=self.rawVCpu)
+                self.sendCanMessage(resp)
+            return
+
+        elif m.FRAME_TYPE == HapcanMessage.SUPPLY_VOLT_REQ_NODE.FRAME_TYPE:
+            if m.isFor(self):
+                resp = HapcanMessage.SUPPLY_VOLT_REQ_NODE_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
+                                                               rawVBus=self.rawVBus, rawVCpu=self.rawVCpu)
                 self.sendCanMessage(resp)
             return
         
@@ -118,6 +153,16 @@ class HapcanDevice:
                 desc1 = self.description[8:16]
                 resp0 = HapcanMessage.DESC_REQ_GROUP_RESP(senderNode=self.nodeId, senderGroup=self.groupId, desc=desc0)
                 resp1 = HapcanMessage.DESC_REQ_GROUP_RESP(senderNode=self.nodeId, senderGroup=self.groupId, desc=desc1)
+                self.sendCanMessage(resp0)
+                self.sendCanMessage(resp1)
+            return
+        
+        elif m.FRAME_TYPE == HapcanMessage.DESC_REQ_NODE.FRAME_TYPE:
+            if m.isFor(self):
+                desc0 = self.description[0:8]
+                desc1 = self.description[8:16]
+                resp0 = HapcanMessage.DESC_REQ_NODE_RESP(senderNode=self.nodeId, senderGroup=self.groupId, desc=desc0)
+                resp1 = HapcanMessage.DESC_REQ_NODE_RESP(senderNode=self.nodeId, senderGroup=self.groupId, desc=desc1)
                 self.sendCanMessage(resp0)
                 self.sendCanMessage(resp1)
             return
