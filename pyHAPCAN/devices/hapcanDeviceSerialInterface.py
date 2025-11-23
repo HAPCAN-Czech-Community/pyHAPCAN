@@ -62,8 +62,32 @@ class HapcanDeviceSerialInterface(HapcanDevice):
         if f.FRAME_TYPE == HapcanMessageUART.EXIT_ONE_BOOTLOADER.FRAME_TYPE:
             return
         
-        #TBD    ADDRESS_FRAME = 0x030
-        #TBD    DATA_FRAME = 0x040
+        elif f.FRAME_TYPE == HapcanMessage.ADDRESS_FRAME.FRAME_TYPE:
+            self._mem_addr = f.addr
+            self._mem_cmd = f.cmd
+            resp = f.makeResponse()
+            self.sendCanMessage(resp)
+            return
+        
+        elif f.FRAME_TYPE == HapcanMessage.DATA_FRAME.FRAME_TYPE:
+            mem = self._get_memory_by_address(self._mem_addr)
+
+            if self._mem_cmd == mem.OPERATION.READ:
+                dataBytes = mem.read(self._mem_addr, 8)
+                resp = HapcanMessage.DATA_FRAME_RESP(targetNode=self.nodeId, targetGroup=self.groupId, dataBytes=dataBytes)
+
+            elif self._mem_cmd == mem.OPERATION.WRITE:
+                mem.write(self._mem_addr, f.dataBytes)
+                dataBytes = mem.read(self._mem_addr, 8)
+                resp = HapcanMessage.DATA_FRAME_RESP(targetNode=self.nodeId, targetGroup=self.groupId, dataBytes=dataBytes)
+
+            elif self._mem_cmd == mem.OPERATION.ERASE:
+                mem.erase_page(self._mem_addr)
+                dataBytes = mem.read(self._mem_addr, 8)
+                resp = HapcanMessage.DATA_FRAME_RESP(targetNode=self.nodeId, targetGroup=self.groupId, dataBytes=dataBytes)
+
+            self.sendCanMessage(resp)
+            return
 
 
         # Process system messages

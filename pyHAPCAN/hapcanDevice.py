@@ -1,10 +1,23 @@
-from enum import IntEnum
-
 from .hapcanMessage import HapcanMessage
-
+from .hapcanMemory import Memory, FlashMemory, MemoryField
 
 
 class HapcanDevice:
+    
+    # Prepare memory-mapped fields
+    serialNumber   = MemoryField(address=0x000024, size=4)
+    hard           = MemoryField(address=0x001010, size=2)
+    hVer           = MemoryField(address=0x001012, size=1)
+    aType          = MemoryField(address=0x001013, size=1)
+    aVers          = MemoryField(address=0x001014, size=1)
+    fVers          = MemoryField(address=0x001015, size=1)
+    bootVer        = MemoryField(address=0x001016, size=1)
+    bootRev        = MemoryField(address=0x001017, size=1)
+    nodeId         = MemoryField(address=0xF00026, size=1)
+    groupId        = MemoryField(address=0xF00027, size=1)
+    description    = MemoryField(address=0xF00030, size=16, dtype=str)
+    #rawVBus       # In real devices, these are immediately converted from ADC when requested
+    #rawVCpu       # In real devices, these are immediately converted from ADC when requested
 
     def __init__(self, emulator, nodeId, groupId, serialNumber, aType,
                  hard=0x3000, hVer=0x03, aVers=0x00, fVers=0x00,
@@ -59,30 +72,13 @@ class HapcanDevice:
         self._emulator = emulator
         
         # Initialize memories
-        self.eeprom = Memory(size=(0xF00000 - 0xF003FF + 1), base_address=0xF00000)  # 0xF00000 - 0xF003FF
-        self.flash = FlashMemory(size=(0x00FFFF - 0x001000 + 1), base_address=0x001000, page_size=64)  # 0x001000 - 0x00FFFF
+        self.eeprom = Memory(size=(0xF003FF - 0xF00000 + 1), base_address=0xF00000)  # 0xF00000 - 0xF003FF
+        self.flash = FlashMemory(size=(0x00FFFF - 0x000000 + 1), base_address=0x000000, page_size=64)  # 0x000000 - 0x00FFFF
 
         self._mem_cmd = Memory.OPERATION.READ
         self._mem_addr = 0
 
-        # Prepare memory-mapped fields
-        self.nodeId         = MemoryField(address=0xF00026, size=1)
-        self.groupId        = MemoryField(address=0xF00027, size=1)
-        self.serialNumber   = MemoryField(address=0x000020, size=4)
-        self.hard           = MemoryField(address=0x001010, size=2)
-        self.hVer           = MemoryField(address=0x001012, size=1)
-        self.aType          = MemoryField(address=0x001013, size=1)
-        self.aVers          = MemoryField(address=0x001014, size=1)
-        self.fVers          = MemoryField(address=0x001015, size=1)
-        self.bootVer        = MemoryField(address=0x001016, size=1)
-        self.bootRev        = MemoryField(address=0x001017, size=1)
-        self.description    = MemoryField(address=0xF00030, size=16, dtype=str)
-        #self.rawVBus       # In real devices, these are immediately converted from ADC when requested
-        #self.rawVCpu       # In real devices, these are immediately converted from ADC when requested
-
         # Set initial values
-        self.nodeId = nodeId
-        self.groupId = groupId
         self.serialNumber = serialNumber
         self.hard = hard
         self.hVer = hVer
@@ -91,6 +87,8 @@ class HapcanDevice:
         self.fVers = fVers
         self.bootVer = bootVer
         self.bootRev = bootRev
+        self.nodeId = nodeId
+        self.groupId = groupId
         self.description = description
         self.rawVBus = rawVBus
         self.rawVCpu = rawVCpu
@@ -119,8 +117,34 @@ class HapcanDevice:
             if m.isFor(self):
                 return
         
-        #TBD ADDRESS_FRAME
-        #TBD DATA_FRAME
+        elif m.FRAME_TYPE == HapcanMessage.ADDRESS_FRAME.FRAME_TYPE:
+            if m.isFor(self):
+                self._mem_addr = m.addr
+                self._mem_cmd = m.cmd
+                resp = m.makeResponse()
+                self.sendCanMessage(resp)
+                return
+
+        elif m.FRAME_TYPE == HapcanMessage.DATA_FRAME.FRAME_TYPE:
+            if m.isFor(self):
+                mem = self._get_memory_by_address(self._mem_addr)
+
+                if self._mem_cmd == mem.OPERATION.READ:
+                    dataBytes = mem.read(self._mem_addr, 8)
+                    resp = HapcanMessage.DATA_FRAME_RESP(targetNode=self.nodeId, targetGroup=self.groupId, dataBytes=dataBytes)
+
+                elif self._mem_cmd == mem.OPERATION.WRITE:
+                    mem.write(self._mem_addr, m.dataBytes)
+                    dataBytes = mem.read(self._mem_addr, 8)
+                    resp = HapcanMessage.DATA_FRAME_RESP(targetNode=self.nodeId, targetGroup=self.groupId, dataBytes=dataBytes)
+
+                elif self._mem_cmd == mem.OPERATION.ERASE:
+                    mem.erase_page(self._mem_addr)
+                    dataBytes = mem.read(self._mem_addr, 8)
+                    resp = HapcanMessage.DATA_FRAME_RESP(targetNode=self.nodeId, targetGroup=self.groupId, dataBytes=dataBytes)
+
+                self.sendCanMessage(resp)
+                return
         
 
         # Process system messages
@@ -129,21 +153,21 @@ class HapcanDevice:
                 resp = HapcanMessage.ENTER_PROG_MODE_REQ_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
                                                               bootVer=self.bootVer, bootRev=self.bootRev)
                 self.sendCanMessage(resp)
-            return
+                return
 
         elif m.FRAME_TYPE == HapcanMessage.HW_TYPE_REQ_GROUP.FRAME_TYPE:
             if m.isFor(self):
                 resp = HapcanMessage.HW_TYPE_REQ_GROUP_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
                                                             hard=self.hard, hVer=self.hVer, serialNumber=self.serialNumber)
                 self.sendCanMessage(resp)
-            return
+                return
         
         elif m.FRAME_TYPE == HapcanMessage.HW_TYPE_REQ_NODE.FRAME_TYPE:
             if m.isFor(self):
                 resp = HapcanMessage.HW_TYPE_REQ_NODE_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
                                                            hard=self.hard, hVer=self.hVer, serialNumber=self.serialNumber)
                 self.sendCanMessage(resp)
-            return
+                return
         
         elif m.FRAME_TYPE == HapcanMessage.FW_TYPE_REQ_GROUP.FRAME_TYPE:
             if m.isFor(self):
@@ -152,7 +176,7 @@ class HapcanDevice:
                                                            aVers=self.aVers, fVers=self.fVers,
                                                            bootVer=self.bootVer, bootRev=self.bootRev)
                 self.sendCanMessage(resp)
-            return
+                return
         
         elif m.FRAME_TYPE == HapcanMessage.FW_TYPE_REQ_NODE.FRAME_TYPE:
             if m.isFor(self):
@@ -161,7 +185,7 @@ class HapcanDevice:
                                                            aVers=self.aVers, fVers=self.fVers,
                                                            bootVer=self.bootVer, bootRev=self.bootRev)
                 self.sendCanMessage(resp)
-            return
+                return
         
         elif m.FRAME_TYPE == HapcanMessage.SET_DEFAULT_NODE_AND_GROUP_REQ.FRAME_TYPE:
             if m.isFor(self):
@@ -170,21 +194,21 @@ class HapcanDevice:
                 self.groupId = self.serialNumber & 0xFF
                 resp = HapcanMessage.SET_DEFAULT_NODE_AND_GROUP_REQ_RESP(newNodeId=self.nodeId, newGroupId=self.groupId)
                 self.sendCanMessage(resp)
-            return
+                return
 
         elif m.FRAME_TYPE == HapcanMessage.SUPPLY_VOLT_REQ_GROUP.FRAME_TYPE:
             if m.isFor(self):
                 resp = HapcanMessage.SUPPLY_VOLT_REQ_GROUP_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
                                                                 rawVBus=self.rawVBus, rawVCpu=self.rawVCpu)
                 self.sendCanMessage(resp)
-            return
+                return
 
         elif m.FRAME_TYPE == HapcanMessage.SUPPLY_VOLT_REQ_NODE.FRAME_TYPE:
             if m.isFor(self):
                 resp = HapcanMessage.SUPPLY_VOLT_REQ_NODE_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
                                                                rawVBus=self.rawVBus, rawVCpu=self.rawVCpu)
                 self.sendCanMessage(resp)
-            return
+                return
         
         elif m.FRAME_TYPE == HapcanMessage.DESC_REQ_GROUP.FRAME_TYPE:
             if m.isFor(self):
@@ -194,7 +218,7 @@ class HapcanDevice:
                 resp1 = HapcanMessage.DESC_REQ_GROUP_RESP(senderNode=self.nodeId, senderGroup=self.groupId, desc=desc1)
                 self.sendCanMessage(resp0)
                 self.sendCanMessage(resp1)
-            return
+                return
         
         elif m.FRAME_TYPE == HapcanMessage.DESC_REQ_NODE.FRAME_TYPE:
             if m.isFor(self):
@@ -204,7 +228,7 @@ class HapcanDevice:
                 resp1 = HapcanMessage.DESC_REQ_NODE_RESP(senderNode=self.nodeId, senderGroup=self.groupId, desc=desc1)
                 self.sendCanMessage(resp0)
                 self.sendCanMessage(resp1)
-            return
+                return
         
         
         # Forward other messages to application message processing
@@ -219,90 +243,3 @@ class HapcanDevice:
     def sendCanMessage(self, message:HapcanMessage):
         message._sender = self
         self._emulator.broadcastCanMessage(message)
-
-
-
-class Memory:
-    class OPERATION(IntEnum):
-        READ = 1
-        WRITE = 2
-
-    def __init__(self, size, base_address=0x00):
-        self.data = bytearray([0xFF]*size)
-        self.base_address = base_address
-
-    def read(self, address, length):
-        # Adjust address relative to base_address
-        idx = address - self.base_address
-        return self.data[idx:idx+length]
-
-    def write(self, address, values):
-        idx = address - self.base_address
-        self.data[idx:idx+len(values)] = values
-
-
-
-class FlashMemory(Memory):
-    class OPERATION(IntEnum):
-        READ = 1
-        WRITE = 2
-        ERASE = 3
-
-    def __init__(self, size, base_address=0x00, page_size=64):
-        super().__init__(size, base_address)
-        self.page_size = page_size
-
-    def write(self, address, values):
-        idx = address - self.base_address
-        for i, byte in enumerate(values):
-            old = self.data[idx+i]
-            new = byte
-            if (old | new) != old:
-                raise Exception(f"Flash write requires erase at {address+i}")
-            self.data[idx+i] = new
-
-    def erase_page(self, address):
-        # Check if address is aligned to page size
-        if (address - self.base_address) % self.page_size != 0:
-            raise ValueError(f"Address {hex(address)} is not aligned to page size {self.page_size}")
-
-        start = address - self.base_address
-        end = start + self.page_size
-        for i in range(start, end):
-            self.data[i] = 0xFF
-
-
-
-class MemoryField:
-
-    def __init__(self, address, size, dtype=int):
-        self.address = address
-        self.size = size
-        self.dtype = dtype # int, str, bytes
-        self.name = None # Set by __set_name__
-
-    def __set_name__(self, owner, name):
-        self.name = name
-
-    def __get__(self, instance, owner=None):
-        if instance is None:
-            return self
-        mem = instance._get_memory_by_address(self.address)
-        raw = mem.read(self.address, self.size)
-        if self.dtype == int:
-            return int.from_bytes(raw, 'big')
-        elif self.dtype == str:
-            return raw.decode('ascii', errors='ignore').rstrip('\x00')
-        else:
-            return raw
-
-    def __set__(self, instance, value):
-        mem = instance._get_memory_by_address(self.address)
-        if self.dtype == int:
-            raw = int(value).to_bytes(self.size, 'big')
-        elif self.dtype == str:
-            raw = value.encode('ascii', errors='ignore')[:self.size]
-            raw = raw.ljust(self.size, b'\x00')
-        else:
-            raw = value
-        mem.write(self.address, raw)

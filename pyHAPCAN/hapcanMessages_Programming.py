@@ -71,20 +71,48 @@ class ADDRESS_FRAME(HapcanMessage):
         addrU = (self.addr >> 16) & 0xFF
         addrH = (self.addr >> 8) & 0xFF
         addrL = self.addr & 0xFF
-        data = bytearray([self.targetNode, self.targetGroup, addrU, addrH, addrL, 0xFF, 0xFF, self.cmd, 0xFF, 0xFF, 0xFF])
+        data = bytearray([self.targetNode, self.targetGroup, addrU, addrH, addrL, 0xFF, 0xFF, self.cmd, 0xFF, 0xFF])
         self._prepend_type(data, self.FRAME_TYPE)
         self._append_checksum(data)
         self._append_header_trailer(data)
         return data
     
+    def isFor(self, device):
+        return (self.targetGroup == device.groupId) and (self.targetNode == device.nodeId)
+    
     def makeResponse(self):
-        return ADDRESS_FRAME_RESP(addr=self.addr, cmd=self.cmd)
+        return ADDRESS_FRAME_RESP(targetNode=self.targetNode, targetGroup=self.targetGroup, addr=self.addr, cmd=self.cmd)
     
 
-class ADDRESS_FRAME_RESP(ADDRESS_FRAME):
+class ADDRESS_FRAME_RESP(HapcanMessage):
     # 0xAA 0x030 0x1 MODULE GROUP echo echo echo echo echo echo echo echo CHKSUM 0xA5
     FRAME_TYPE = 0x0301
-    # Methods are inherited from ADDRESS_FRAME
+
+    def __init__(self, targetNode, targetGroup, addr, cmd, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.targetNode = targetNode
+        self.targetGroup = targetGroup
+        self.addr = addr
+        self.cmd = cmd
+
+    @classmethod
+    def from_bytes(cls, data: bytearray):
+        targetNode = data[3]
+        targetGroup = data[4]
+        addr = (data[5] << 16) | (data[6] << 8) | data[7]
+        cmd = data[10]
+        msg = cls(targetNode=targetNode, targetGroup=targetGroup, addr=addr, cmd=cmd)
+        return msg
+    
+    def to_bytes(self):
+        addrU = (self.addr >> 16) & 0xFF
+        addrH = (self.addr >> 8) & 0xFF
+        addrL = self.addr & 0xFF
+        data = bytearray([self.targetNode, self.targetGroup, addrU, addrH, addrL, 0xFF, 0xFF, self.cmd, 0xFF, 0xFF])
+        self._prepend_type(data, self.FRAME_TYPE)
+        self._append_checksum(data)
+        self._append_header_trailer(data)
+        return data
 
 
 class DATA_FRAME(HapcanMessage):
@@ -114,14 +142,39 @@ class DATA_FRAME(HapcanMessage):
         self._append_header_trailer(data)
         return data
     
+    def isFor(self, device):
+        return (self.targetGroup == device.groupId) and (self.targetNode == device.nodeId)
+    
     def makeResponse(self):
         return DATA_FRAME_RESP(targetNode=self.targetNode, targetGroup=self.targetGroup, dataBytes=self.dataBytes)
     
 
-class DATA_FRAME_RESP(DATA_FRAME):
+class DATA_FRAME_RESP(HapcanMessage):
     # 0xAA 0x040 0x1 MODULE GROUP DATA0 DATA1 DATA2 DATA3 DATA4 DATA5 DATA6 DATA7 CHKSUM 0xA5
     FRAME_TYPE = 0x0401
-    # Methods are inherited from DATA_FRAME
+
+    def __init__(self, targetNode, targetGroup, dataBytes, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if len(dataBytes) != 8:
+            raise ValueError("dataBytes must be exactly 8 bytes long")
+        self.targetNode = targetNode
+        self.targetGroup = targetGroup
+        self.dataBytes = dataBytes
+
+    @classmethod
+    def from_bytes(cls, data: bytearray):
+        targetNode = data[3]
+        targetGroup = data[4]
+        dataBytes = data[5:13]
+        msg = cls(targetNode=targetNode, targetGroup=targetGroup, dataBytes=dataBytes)
+        return msg
+    
+    def to_bytes(self):
+        data = bytearray([self.targetNode, self.targetGroup]) + bytearray(self.dataBytes)
+        self._prepend_type(data, self.FRAME_TYPE)
+        self._append_checksum(data)
+        self._append_header_trailer(data)
+        return data
 
 
 #TBD    ERROR_FRAME = 0x0F0

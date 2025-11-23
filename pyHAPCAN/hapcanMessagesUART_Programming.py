@@ -49,10 +49,31 @@ class ADDRESS_FRAME(HapcanMessageUART):
         return ADDRESS_FRAME_RESP(addr=self.addr, cmd=self.cmd)
     
 
-class ADDRESS_FRAME_RESP(ADDRESS_FRAME):
+class ADDRESS_FRAME_RESP(HapcanMessageUART):
     # 0xAA 0x030 0x1 echo echo echo echo echo echo echo echo CHKSUM 0xA5
     FRAME_TYPE = 0x0301
-    # Methods are inherited from ADDRESS_FRAME
+
+    def __init__(self, addr, cmd, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.addr = addr
+        self.cmd = cmd
+
+    @classmethod
+    def from_bytes(cls, data: bytearray):
+        addr = (data[3] << 16) | (data[4] << 8) | data[5]
+        cmd = data[8]
+        msg = cls(addr=addr, cmd=cmd)
+        return msg
+    
+    def to_bytes(self):
+        addrU = (self.addr >> 16) & 0xFF
+        addrH = (self.addr >> 8) & 0xFF
+        addrL = self.addr & 0xFF
+        data = bytearray([addrU, addrH, addrL, 0xFF, 0xFF, self.cmd, 0xFF, 0xFF])
+        self._prepend_type(data, self.FRAME_TYPE)
+        self._append_checksum(data)
+        self._append_header_trailer(data)
+        return data
 
 
 class DATA_FRAME(HapcanMessageUART):
@@ -82,10 +103,27 @@ class DATA_FRAME(HapcanMessageUART):
         return DATA_FRAME_RESP(dataBytes=self.dataBytes)
     
 
-class DATA_FRAME_RESP(DATA_FRAME):
+class DATA_FRAME_RESP(HapcanMessageUART):
     # 0xAA 0x040 0x1 echo echo echo echo echo echo echo echo CHKSUM 0xA5
     FRAME_TYPE = 0x0401
-    # Methods are inherited from DATA_FRAME
 
+    def __init__(self, dataBytes: bytearray, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if len(dataBytes) != 8:
+            raise ValueError("dataBytes must be exactly 8 bytes long")
+        self.dataBytes = dataBytes
+
+    @classmethod
+    def from_bytes(cls, data: bytearray):
+        dataBytes = data[3:11]
+        msg = cls(dataBytes=dataBytes)
+        return msg
+    
+    def to_bytes(self):
+        data = bytearray(self.dataBytes)
+        self._prepend_type(data, self.FRAME_TYPE)
+        self._append_checksum(data)
+        self._append_header_trailer(data)
+        return data
 
 #TBD    ERROR_FRAME = 0x0F0
