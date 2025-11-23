@@ -77,23 +77,23 @@ class HapcanDeviceSerialInterface(HapcanDevice):
         if f.FRAME_TYPE == HapcanMessageUART.EXIT_ONE_BOOTLOADER.FRAME_TYPE:
             return
         
-        elif f.FRAME_TYPE == HapcanMessage.ADDRESS_FRAME.FRAME_TYPE:
+        elif f.FRAME_TYPE == HapcanMessageUART.ADDRESS_FRAME.FRAME_TYPE:
             self._mem_addr = f.addr
             self._mem_cmd = f.cmd
             resp = f.makeResponse()
-            self.sendCanMessage(resp)
+            self._sendSerialMessage(resp)
             return
         
-        elif f.FRAME_TYPE == HapcanMessage.DATA_FRAME.FRAME_TYPE:
+        elif f.FRAME_TYPE == HapcanMessageUART.DATA_FRAME.FRAME_TYPE:
             mem = self._get_memory_by_address(self._mem_addr)
 
             if self._mem_cmd == mem.OPERATION.READ:
                 dataBytes = mem.read(self._mem_addr, 8)
-                resp = HapcanMessage.DATA_FRAME_RESP(targetNode=self.nodeId, targetGroup=self.groupId, dataBytes=dataBytes)
+                resp = HapcanMessageUART.DATA_FRAME_RESP(dataBytes=dataBytes)
 
             elif self._mem_cmd == mem.OPERATION.WRITE:
                 # Need to prepare response before writing to memrory, in case the nodeId/groupId changes
-                resp = HapcanMessage.DATA_FRAME_RESP(targetNode=self.nodeId, targetGroup=self.groupId, dataBytes=bytearray(8*[0]))
+                resp = HapcanMessageUART.DATA_FRAME_RESP(dataBytes=bytearray(8*[0]))
                 mem.write(self._mem_addr, f.dataBytes)
                 dataBytes = mem.read(self._mem_addr, 8)
                 resp.dataBytes = dataBytes
@@ -101,9 +101,9 @@ class HapcanDeviceSerialInterface(HapcanDevice):
             elif self._mem_cmd == mem.OPERATION.ERASE:
                 mem.erase_page(self._mem_addr)
                 dataBytes = mem.read(self._mem_addr, 8)
-                resp = HapcanMessage.DATA_FRAME_RESP(targetNode=self.nodeId, targetGroup=self.groupId, dataBytes=dataBytes)
+                resp = HapcanMessageUART.DATA_FRAME_RESP(dataBytes=dataBytes)
 
-            self.sendCanMessage(resp)
+            self._sendSerialMessage(resp)
             return
 
 
@@ -133,13 +133,6 @@ class HapcanDeviceSerialInterface(HapcanDevice):
             self._sendSerialMessage(HapcanMessageUART.DESC_REQ_NODE_RESP(desc0))
             self._sendSerialMessage(HapcanMessageUART.DESC_REQ_NODE_RESP(desc1))
             return
-
-
-    def _sendSerialFrame(self, data:bytearray):
-        frame = copy(data)
-        HapcanMessage._append_checksum(frame)
-        HapcanMessage._append_header_trailer(frame)
-        self.serial.write(frame)
 
 
     def _sendSerialMessage(self, message:HapcanMessage):
