@@ -1,6 +1,7 @@
 from .hapcanMessage import HapcanMessage
     
     
+
 class EXIT_ALL_BOOTLOADER(HapcanMessage):
     # 0xAA 0x010 0x0 0x00 0x00 0xXX 0xXX 0xXX 0xXX 0xXX 0xXX 0xXX 0xXX CHKSUM 0xA5
     FRAME_TYPE = 0x0100
@@ -32,7 +33,7 @@ class EXIT_ONE_BOOTLOADER(HapcanMessage):
 
     @classmethod
     def from_bytes(cls, data: bytearray):
-        msg = cls()
+        msg = cls(targetNode=data[3], targetGroup=data[4])
         return msg
     
     def to_bytes(self):
