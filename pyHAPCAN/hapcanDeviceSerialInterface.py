@@ -42,12 +42,13 @@ class HapcanDeviceSerialInterface(HapcanDevice):
             try:
                 f = HapcanMessage.from_bytes(frame)
                 f._sender = self
-                self._emulator.broadcastCanMessage(f)
             except ValueError as e:
                 print(e)
-            finally:
                 return
-
+            self._emulator.broadcastCanMessage(f)
+            return
+        
+        
         # Other frame lengths should be handled as UART system messages
         try:
             f = HapcanMessageUART.from_bytes(frame)
