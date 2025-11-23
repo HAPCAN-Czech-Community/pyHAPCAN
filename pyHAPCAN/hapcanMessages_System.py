@@ -2,7 +2,57 @@ from .hapcanMessage import HapcanMessage
     
 
 
-#TBD    ENTER_PROG_MODE_REQ = 0x100
+class ENTER_PROG_MODE_REQ(HapcanMessage):
+    # 0xAA 0x100 0x0 MODUL GROUP 0xXX 0xXX MODULE GROUP 0xXX 0xXX 0xXX 0xXX CHKSUM 0xA5
+    FRAME_TYPE = 0x1000
+
+    def __init__(self, senderNode, senderGroup, reqNode, reqGroup, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.senderNode = senderNode
+        self.senderGroup = senderGroup
+        self.reqNode = reqNode
+        self.reqGroup = reqGroup
+
+    @classmethod
+    def from_bytes(cls, data: bytearray):
+        msg = cls(senderNode=data[3], senderGroup=data[4], reqNode=data[7], reqGroup=data[8])
+        return msg
+    
+    def to_bytes(self):
+        data = bytearray([self.senderNode, self.senderGroup, 0xFF, 0xFF, self.reqNode, self.reqGroup, 0xFF, 0xFF, 0xFF, 0xFF])
+        self._prepend_type(data, self.FRAME_TYPE)
+        self._append_checksum(data)
+        self._append_header_trailer(data)
+        return data
+    
+    def isFor(self, device):
+        return (self.reqGroup == device.groupId) and (self.reqNode == device.nodeId)
+    
+
+class ENTER_PROG_MODE_REQ_RESP(HapcanMessage):
+    # 0xAA 0x100 0x1 MODULE GROUP 0xFF 0xFF BVER1 BVER2 0xFF 0xFF 0xFF 0xFF CHKSUM 0xA5
+    FRAME_TYPE = 0x1001
+
+    def __init__(self, senderNode, senderGroup, bootVer, bootRev, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.senderNode = senderNode
+        self.senderGroup = senderGroup
+        self.bootVer = bootVer
+        self.bootRev = bootRev
+
+    @classmethod
+    def from_bytes(cls, data: bytearray):
+        msg = cls(senderNode=data[3], senderGroup=data[4], bootVer=data[7], bootRev=data[8])
+        return msg
+
+    def to_bytes(self):
+        data = bytearray([self.senderNode, self.senderGroup, 0xFF, 0xFF, self.bootVer, self.bootRev, 0xFF, 0xFF, 0xFF, 0xFF])
+        self._prepend_type(data, self.FRAME_TYPE)
+        self._append_checksum(data)
+        self._append_header_trailer(data)
+        return data
+
+
 #TBD    REBOOT_REQ_GROUP = 0x101
 #TBD    REBOOT_REQ_NODE = 0x102
 

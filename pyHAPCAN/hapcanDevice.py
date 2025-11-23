@@ -1,4 +1,7 @@
+from enum import IntEnum
+
 from .hapcanMessage import HapcanMessage
+
 
 
 class HapcanDevice:
@@ -12,8 +15,8 @@ class HapcanDevice:
         byte_fields = [
             "nodeId",
             "groupId",
-            "aType",
             "hVer",
+            "aType",
             "aVers",
             "fVers",
             "bootVer",
@@ -46,20 +49,44 @@ class HapcanDevice:
             raise TypeError(f"serialNumber must be an integer (0x0–0xFFFFFFFF), got {type(serialNumber).__name__}")
         if not (0 <= serialNumber <= 0xFFFFFFFF):
             raise ValueError(f"serialNumber must be in range 0x0–0xFFFFFFFF, got {serialNumber}")
-        
+
         # Validate description
         if not isinstance(description, str):
             raise TypeError(f"description must be a string, got {type(description).__name__}")
         if len(description) > 16:
             raise ValueError(f"description must be 16 characters or less, got {len(description)}")
         
-        # Assign values
+        self._emulator = emulator
+        
+        # Initialize memories
+        self.eeprom = Memory(size=(0xF00000 - 0xF003FF + 1), base_address=0xF00000)  # 0xF00000 - 0xF003FF
+        self.flash = FlashMemory(size=(0x00FFFF - 0x001000 + 1), base_address=0x001000, page_size=64)  # 0x001000 - 0x00FFFF
+
+        self._mem_cmd = Memory.OPERATION.READ
+        self._mem_addr = 0
+
+        # Prepare memory-mapped fields
+        self.nodeId         = MemoryField(address=0xF00026, size=1)
+        self.groupId        = MemoryField(address=0xF00027, size=1)
+        self.serialNumber   = MemoryField(address=0x000020, size=4)
+        self.hard           = MemoryField(address=0x001010, size=2)
+        self.hVer           = MemoryField(address=0x001012, size=1)
+        self.aType          = MemoryField(address=0x001013, size=1)
+        self.aVers          = MemoryField(address=0x001014, size=1)
+        self.fVers          = MemoryField(address=0x001015, size=1)
+        self.bootVer        = MemoryField(address=0x001016, size=1)
+        self.bootRev        = MemoryField(address=0x001017, size=1)
+        self.description    = MemoryField(address=0xF00030, size=16, dtype=str)
+        #self.rawVBus       # In real devices, these are immediately converted from ADC when requested
+        #self.rawVCpu       # In real devices, these are immediately converted from ADC when requested
+
+        # Set initial values
         self.nodeId = nodeId
         self.groupId = groupId
         self.serialNumber = serialNumber
-        self.aType = aType
         self.hard = hard
         self.hVer = hVer
+        self.aType = aType
         self.aVers = aVers
         self.fVers = fVers
         self.bootVer = bootVer
@@ -68,7 +95,12 @@ class HapcanDevice:
         self.rawVBus = rawVBus
         self.rawVCpu = rawVCpu
 
-        self._emulator = emulator
+
+    def _get_memory_by_address(self, addr):
+        for mem in [self.eeprom, self.flash]:
+            if mem.base_address <= addr < mem.base_address + len(mem.data):
+                return mem
+        raise ValueError(f"Address {hex(addr)} is outside memory ranges")
 
 
     def processCanApplicationMessage(self, m: HapcanMessage):
@@ -92,6 +124,13 @@ class HapcanDevice:
         
 
         # Process system messages
+        elif m.FRAME_TYPE == HapcanMessage.ENTER_PROG_MODE_REQ.FRAME_TYPE:
+            if m.isFor(self):
+                resp = HapcanMessage.ENTER_PROG_MODE_REQ_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
+                                                              bootVer=self.bootVer, bootRev=self.bootRev)
+                self.sendCanMessage(resp)
+            return
+
         elif m.FRAME_TYPE == HapcanMessage.HW_TYPE_REQ_GROUP.FRAME_TYPE:
             if m.isFor(self):
                 resp = HapcanMessage.HW_TYPE_REQ_GROUP_RESP(senderNode=self.nodeId, senderGroup=self.groupId,
@@ -180,3 +219,90 @@ class HapcanDevice:
     def sendCanMessage(self, message:HapcanMessage):
         message._sender = self
         self._emulator.broadcastCanMessage(message)
+
+
+
+class Memory:
+    class OPERATION(IntEnum):
+        READ = 1
+        WRITE = 2
+
+    def __init__(self, size, base_address=0x00):
+        self.data = bytearray([0xFF]*size)
+        self.base_address = base_address
+
+    def read(self, address, length):
+        # Adjust address relative to base_address
+        idx = address - self.base_address
+        return self.data[idx:idx+length]
+
+    def write(self, address, values):
+        idx = address - self.base_address
+        self.data[idx:idx+len(values)] = values
+
+
+
+class FlashMemory(Memory):
+    class OPERATION(IntEnum):
+        READ = 1
+        WRITE = 2
+        ERASE = 3
+
+    def __init__(self, size, base_address=0x00, page_size=64):
+        super().__init__(size, base_address)
+        self.page_size = page_size
+
+    def write(self, address, values):
+        idx = address - self.base_address
+        for i, byte in enumerate(values):
+            old = self.data[idx+i]
+            new = byte
+            if (old | new) != old:
+                raise Exception(f"Flash write requires erase at {address+i}")
+            self.data[idx+i] = new
+
+    def erase_page(self, address):
+        # Check if address is aligned to page size
+        if (address - self.base_address) % self.page_size != 0:
+            raise ValueError(f"Address {hex(address)} is not aligned to page size {self.page_size}")
+
+        start = address - self.base_address
+        end = start + self.page_size
+        for i in range(start, end):
+            self.data[i] = 0xFF
+
+
+
+class MemoryField:
+
+    def __init__(self, address, size, dtype=int):
+        self.address = address
+        self.size = size
+        self.dtype = dtype # int, str, bytes
+        self.name = None # Set by __set_name__
+
+    def __set_name__(self, owner, name):
+        self.name = name
+
+    def __get__(self, instance, owner=None):
+        if instance is None:
+            return self
+        mem = instance._get_memory_by_address(self.address)
+        raw = mem.read(self.address, self.size)
+        if self.dtype == int:
+            return int.from_bytes(raw, 'big')
+        elif self.dtype == str:
+            return raw.decode('ascii', errors='ignore').rstrip('\x00')
+        else:
+            return raw
+
+    def __set__(self, instance, value):
+        mem = instance._get_memory_by_address(self.address)
+        if self.dtype == int:
+            raw = int(value).to_bytes(self.size, 'big')
+        elif self.dtype == str:
+            raw = value.encode('ascii', errors='ignore')[:self.size]
+            raw = raw.ljust(self.size, b'\x00')
+        else:
+            raw = value
+        mem.write(self.address, raw)

@@ -6,4 +6,4 @@ from .hapcanMessagesUART_System import *
 from .hapcanMessages_Programming import *
 from .hapcanMessages_System import *
 
-from .hapcanDeviceSerialInterface import * #TODO Make individual devices as HapcanDevice properties, just as done with HapcanMessages
+from .devices.hapcanDeviceSerialInterface import * #TODO Make individual devices as HapcanDevice properties, just as done with HapcanMessages???

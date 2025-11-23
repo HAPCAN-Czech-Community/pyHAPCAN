@@ -1,8 +1,8 @@
 from copy import copy
 import serial
 
-from .hapcanMessage import HapcanMessage, HapcanMessageUART
-from .hapcanDevice import HapcanDevice
+from ..hapcanMessage import HapcanMessage, HapcanMessageUART
+from ..hapcanDevice import HapcanDevice
 
 
 class HapcanDeviceSerialInterface(HapcanDevice):
@@ -48,7 +48,7 @@ class HapcanDeviceSerialInterface(HapcanDevice):
             self._emulator.broadcastCanMessage(f)
             return
         
-        
+
         # Other frame lengths should be handled as UART system messages
         try:
             f = HapcanMessageUART.from_bytes(frame)
