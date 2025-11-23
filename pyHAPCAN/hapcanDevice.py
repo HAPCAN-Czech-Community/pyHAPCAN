@@ -134,9 +134,11 @@ class HapcanDevice:
                     resp = HapcanMessage.DATA_FRAME_RESP(targetNode=self.nodeId, targetGroup=self.groupId, dataBytes=dataBytes)
 
                 elif self._mem_cmd == mem.OPERATION.WRITE:
+                    # Need to prepare response before writing to memrory, in case the nodeId/groupId changes
+                    resp = HapcanMessage.DATA_FRAME_RESP(targetNode=self.nodeId, targetGroup=self.groupId, dataBytes=bytearray(8*[0]))
                     mem.write(self._mem_addr, m.dataBytes)
                     dataBytes = mem.read(self._mem_addr, 8)
-                    resp = HapcanMessage.DATA_FRAME_RESP(targetNode=self.nodeId, targetGroup=self.groupId, dataBytes=dataBytes)
+                    resp.dataBytes = dataBytes
 
                 elif self._mem_cmd == mem.OPERATION.ERASE:
                     mem.erase_page(self._mem_addr)
