@@ -1,8 +1,13 @@
 from copy import copy
 import serial
+import time
 
 from ..hapcanMessage import HapcanMessage, HapcanMessageUART
 from ..hapcanDevice import HapcanDevice
+
+
+def micros():
+    return int(time.perf_counter() * 1_000_000)
 
 
 class HapcanDeviceSerialInterface(HapcanDevice):
@@ -11,6 +16,7 @@ class HapcanDeviceSerialInterface(HapcanDevice):
         super().__init__(*args, aType=101, bootVer=3, bootRev=4, aVers=0, fVers=1, **kwargs)
         self.serial = serial
         self._rxBuffer = bytearray()
+        self._last_serial_rx_time = 0
 
 
     def process(self):
@@ -18,22 +24,29 @@ class HapcanDeviceSerialInterface(HapcanDevice):
 
         if buf:
             for b in buf:
+                self._last_serial_rx_time = micros()
                 self._processSerialRxByte(b)
+
+        if micros() >= self._last_serial_rx_time + 100: # 100 us timeout for frame end
+            self._last_serial_rx_time = micros()
+            self._processSerialRxByte(None) # Trigger frame end processing
+
 
 
     def _processSerialRxByte(self, b:int):
-        if b == 0xAA: # Frame start
-            self._rxBuffer = bytearray()
+        # If b is None, it indicates a timeout for frame end
+        if b is None:
+            # Check if the frame structure is valid
+            if len(self._rxBuffer) > 0:
+                if self._rxBuffer[-1] == 0xA5 and self._rxBuffer[0] == 0xAA:
+                    self._processSerialRxFrame(self._rxBuffer)
+                    self._rxBuffer = bytearray()
+                else:
+                    print("Received invalid serial frame: " + self._rxBuffer.hex(sep=" "))
+                    self._rxBuffer = bytearray()
 
-        self._rxBuffer.append(b)
-        
-        if self._rxBuffer[-1] == 0xA5: # Frame end
-            # Check if the frame is valid
-            if self._rxBuffer[0] == 0xAA:
-                self._processSerialRxFrame(self._rxBuffer)
-            else:
-                print("Invalid incoming serial frame: " + self._rxBuffer.hex(sep=" "))
-            self._rxBuffer = bytearray()
+        else:
+            self._rxBuffer.append(b)
 
 
     def _processSerialRxFrame(self, frame):
@@ -42,11 +55,13 @@ class HapcanDeviceSerialInterface(HapcanDevice):
             try:
                 f = HapcanMessage.from_bytes(frame)
                 f._sender = self
+                if not f.checksumValid:
+                    return False
             except ValueError as e:
                 print(e)
-                return
+                return False
             self._emulator.broadcastCanMessage(f)
-            return
+            return True
         
 
         # Other frame lengths should be handled as UART system messages
